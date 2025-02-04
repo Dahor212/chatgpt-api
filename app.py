@@ -2,8 +2,7 @@ import os
 import openai
 import chromadb
 import psutil
-from docx import Document
-import tiktoken
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -29,46 +28,54 @@ def memory_usage():
         "percent": mem.percent
     })
 
-# Generátor pro načítání dokumentů po jednom
-def load_documents_from_directory(directory_path):
-    for filename in os.listdir(directory_path):
-        if filename.endswith(".docx"):
-            doc_path = os.path.join(directory_path, filename)
-            document = Document(doc_path)
-            content = "\n".join(para.text for para in document.paragraphs if para.text.strip())
-            yield filename, content
-
-# Rozdělení textu na menší části
-def split_text(text, max_tokens=500):
-    enc = tiktoken.get_encoding("cl100k_base")
-    tokens = enc.encode(text)
-    for i in range(0, len(tokens), max_tokens):
-        yield enc.decode(tokens[i:i + max_tokens])
-
-# Vytvoření embeddingů a uložení do ChromaDB
-def create_embeddings(directory_path):
-    # Zpracování dokumentů po částech, čímž se šetří paměť
-    for doc_name, content in load_documents_from_directory(directory_path):
-        for i, chunk in enumerate(split_text(content, max_tokens=500)):
-            response = openai.embeddings.create(input=[chunk], model="text-embedding-ada-002")
-            embedding = response.data[0].embedding
-            collection.add(
-                ids=[f"{doc_name}_{i}"],
-                embeddings=[embedding],
-                metadatas=[{"source": doc_name}],
-                documents=[chunk]
-            )
+# Načtení embeddingů z GitHubu
+def load_embeddings_from_github():
+    url = "https://raw.githubusercontent.com/yourusername/yourrepository/main/Embeddingy/embeddings.json"
+    response = requests.get(url)
+    if response.status_code == 200:
+        embeddings_data = response.json()
+        return embeddings_data
+    else:
+        raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
 
 # Vyhledání relevantních dokumentů v ChromaDB
 def query_chromadb(query, n_results=5):
-    response = openai.embeddings.create(input=[query], model="text-embedding-ada-002")
-    query_embedding = response.data[0].embedding
-    results = collection.query(query_embeddings=[query_embedding], n_results=n_results, include=["documents"])
-    return results.get("documents", [])
+    # Načteme embeddingy pro dotaz
+    response = openai.Embedding.create(input=[query], model="text-embedding-ada-002")
+    query_embedding = response['data'][0]['embedding']
+
+    # Načteme embeddingy z GitHubu
+    embeddings_data = load_embeddings_from_github()
+
+    # Prohledáme embeddingy z GitHubu a vrátíme dokumenty s nejbližšími vektory
+    results = []
+    for doc_name, doc_embeddings in embeddings_data.items():
+        for embedding in doc_embeddings:
+            # Vypočteme vzdálenost mezi query embeddingem a embeddingem dokumentu
+            # (Používáme jednoduchou metodu pro podobnost, např. kosinovou podobnost)
+            similarity = cosine_similarity(query_embedding, embedding)
+            results.append({
+                "document": doc_name,
+                "similarity": similarity,
+                "embedding": embedding
+            })
+    
+    # Seřadíme výsledky podle podobnosti
+    results = sorted(results, key=lambda x: x['similarity'], reverse=True)
+    return results[:n_results]
+
+# Funkce pro výpočet kosinové podobnosti mezi dvěma vektory
+def cosine_similarity(vec1, vec2):
+    dot_product = sum(a * b for a, b in zip(vec1, vec2))
+    magnitude1 = sum(a * a for a in vec1) ** 0.5
+    magnitude2 = sum(b * b for b in vec2) ** 0.5
+    if magnitude1 == 0 or magnitude2 == 0:
+        return 0
+    return dot_product / (magnitude1 * magnitude2)
 
 # Generování odpovědi
 def generate_answer_with_assistant(query, context_documents):
-    context = "\n\n".join(str(doc) for doc in context_documents)
+    context = "\n\n".join(str(doc['document']) for doc in context_documents)
     prompt = f"""
     Jsi asistentka pro helpdesk ve společnosti, která nabízí penzijní spoření. Tvoje odpovědi musí být založeny pouze na následujících informacích z dokumentů. Pokud žádná odpověď není v těchto dokumentech, odpověz: 'Bohužel, odpověď ve své databázi nemám.'
     
@@ -103,10 +110,8 @@ def handle_query():
     query = data.get("query")
     if not query:
         return jsonify({"error": "Dotaz nesmí být prázdný"}), 400
-    
-    if not collection.count():  # Oprava kontroly, zda je kolekce prázdná
-        create_embeddings("./documents")
-    
+
+    # Vyhledáme relevantní dokumenty z GitHubu
     context_documents = query_chromadb(query)
     answer = generate_answer_with_assistant(query, context_documents) if context_documents else "Bohužel, odpověď ve své databázi nemám."
     return jsonify({"answer": answer})
