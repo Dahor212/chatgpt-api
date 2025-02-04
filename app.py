@@ -104,7 +104,13 @@ def generate_answer_with_assistant(query, context_documents):
     return answer
 
 
-# API cesta
+# API cesta pro kořenovou URL
+@app.route("/", methods=["GET"])
+def home():
+    return "Aplikace běží!"
+
+
+# API cesta pro chat
 @app.route("/api/chat", methods=["POST"])
 def handle_query():
     data = request.get_json()
