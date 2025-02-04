@@ -46,7 +46,8 @@ def create_embeddings(documents):
         documents_list = []
 
         for i, chunk in enumerate(text_chunks):
-            embedding = openai.Embedding.create(input=chunk, model="text-embedding-ada-002")["data"][0]["embedding"]
+            # Použití nového volání API pro embeddingy
+            embedding = openai.embeddings.create(input=chunk, model="text-embedding-ada-002")["data"][0]["embedding"]
             ids.append(f"{doc_name}_{i}")  # Každý chunk dostane unikátní ID
             embeddings.append(embedding)  # Přidáváme embedding
             metadatas.append({"source": doc_name})  # Přidáváme metadata
@@ -63,7 +64,7 @@ def create_embeddings(documents):
 
 # Funkce pro dotazování do ChromaDB
 def query_chromadb(query, n_results=5):
-    response = openai.Embedding.create(input=query, model="text-embedding-ada-002")
+    response = openai.embeddings.create(input=query, model="text-embedding-ada-002")
     query_embedding = response["data"][0]["embedding"]
     results = collection.query(query_embeddings=[query_embedding], n_results=n_results, include=["documents"])
     if "documents" in results:
