@@ -26,7 +26,7 @@ def memory_usage():
 
 # Načtení embeddingů z GitHubu
 def load_embeddings_from_github():
-    url = "https://raw.githubusercontent.com/yourusername/yourrepository/main/Embeddingy/embeddings.json"
+    url = "https://github.com/Dahor212/chatgpt-api/blob/main/Embeddingy/embeddings.json"
     response = requests.get(url)
     if response.status_code == 200:
         embeddings_data = response.json()
