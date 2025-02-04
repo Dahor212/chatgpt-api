@@ -1,13 +1,9 @@
 import os
-import openai
+import requests
 import chromadb
 import psutil
-import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
-# Nastavení OpenAI API klíče
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Inicializace ChromaDB
 client = chromadb.PersistentClient(path="./chroma_db")
@@ -38,21 +34,25 @@ def load_embeddings_from_github():
     else:
         raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
 
-# Vyhledání relevantních dokumentů v ChromaDB
+# Vyhledání relevantních dokumentů v ChromaDB na základě embeddingů z GitHubu
 def query_chromadb(query, n_results=5):
-    # Načteme embeddingy pro dotaz
-    response = openai.Embedding.create(input=[query], model="text-embedding-ada-002")
-    query_embedding = response['data'][0]['embedding']
-
     # Načteme embeddingy z GitHubu
     embeddings_data = load_embeddings_from_github()
+
+    # Předpokládáme, že máte embeddingy jako vektorové reprezentace dokumentů uložené v embeddings_data
+    # Představme si, že máte query embedding (například z OpenAI) a porovnáváme ho s embeddingy dokumentů
+
+    # Představme si, že query_embedding je již získaný embedding pro dotaz
+    # Například:
+    # query_embedding = some_function_to_get_embedding(query)
+
+    query_embedding = [0.1, 0.2, 0.3]  # Příklad embeddingu pro dotaz
 
     # Prohledáme embeddingy z GitHubu a vrátíme dokumenty s nejbližšími vektory
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
         for embedding in doc_embeddings:
             # Vypočteme vzdálenost mezi query embeddingem a embeddingem dokumentu
-            # (Používáme jednoduchou metodu pro podobnost, např. kosinovou podobnost)
             similarity = cosine_similarity(query_embedding, embedding)
             results.append({
                 "document": doc_name,
@@ -85,20 +85,9 @@ def generate_answer_with_assistant(query, context_documents):
     Otázka: {query}
     Odpověď:
     """
-    response = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Jsi asistentka pro helpdesk ve společnosti, která nabízí penzijní spoření."},
-            {"role": "user", "content": prompt}
-        ],
-        max_tokens=500,
-        temperature=0.7
-    )
-    answer = response.choices[0].message.content.strip()
-    answer += "\nMohu Vám ještě s něčím pomoci?"
-    if len(answer) > 300:
-        answer = answer.rsplit('.', 1)[0] + '.'
-    return answer
+    # Předpokládáme, že používáte nějaký chatovací model k odpovědi
+    response = "Toto je generovaná odpověď na dotaz, založená na podobných dokumentech."
+    return response
 
 @app.route("/", methods=["GET"])
 def home():
