@@ -7,7 +7,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 # Použití proměnné prostředí pro OpenAI API klíč
-openai.api_key = "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"  # API klíč by měl být nastaven v prostředí
+openai.api_key = "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"  # Změň na svůj API klíč
 client = chromadb.Client()
 collection_name = "dokumenty_kolekce"
 collection = client.get_or_create_collection(name=collection_name)
@@ -119,7 +119,8 @@ def handle_query():
     if not query:
         return jsonify({"error": "Dotaz nesmí být prázdný"}), 400
 
-    documents = load_documents_from_directory("C:/Programy/Python/dokumenty")
+    # Načítání dokumentů z relativní cesty
+    documents = load_documents_from_directory("./documents")  # Uprav tuto cestu, pokud soubory nejsou v tomto adresáři
     # Vytvořit embeddingy pouze pokud neexistují
     if len(collection.get()["documents"]) == 0:
         create_embeddings(documents)  # Načtení dokumentů a uložení embeddingů
