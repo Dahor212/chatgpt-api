@@ -29,7 +29,7 @@ def memory_usage():
         "percent": mem.percent
     })
 
-# Generátor pro načítání dokumentů
+# Generátor pro načítání dokumentů po jednom
 def load_documents_from_directory(directory_path):
     for filename in os.listdir(directory_path):
         if filename.endswith(".docx"):
@@ -38,8 +38,8 @@ def load_documents_from_directory(directory_path):
             content = "\n".join(para.text for para in document.paragraphs if para.text.strip())
             yield filename, content
 
-# Rozdělení textu na části
-def split_text(text, max_tokens=1000):
+# Rozdělení textu na menší části
+def split_text(text, max_tokens=500):
     enc = tiktoken.get_encoding("cl100k_base")
     tokens = enc.encode(text)
     for i in range(0, len(tokens), max_tokens):
@@ -47,8 +47,9 @@ def split_text(text, max_tokens=1000):
 
 # Vytvoření embeddingů a uložení do ChromaDB
 def create_embeddings(directory_path):
+    # Zpracování dokumentů po částech, čímž se šetří paměť
     for doc_name, content in load_documents_from_directory(directory_path):
-        for i, chunk in enumerate(split_text(content, max_tokens=1000)):
+        for i, chunk in enumerate(split_text(content, max_tokens=500)):
             response = openai.embeddings.create(input=[chunk], model="text-embedding-ada-002")
             embedding = response.data[0].embedding
             collection.add(
@@ -111,4 +112,4 @@ def handle_query():
     return jsonify({"answer": answer})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)), debug=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)), debug=True, workers=2)
