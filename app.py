@@ -1,6 +1,7 @@
 import os
 import openai
 import chromadb
+import psutil  # Import knihovny pro sledování systémových prostředků
 from docx import Document
 import tiktoken
 from flask import Flask, request, jsonify
@@ -15,6 +16,17 @@ collection = client.get_or_create_collection(name=collection_name)
 
 app = Flask(__name__)
 CORS(app)  # Povolení CORS pro komunikaci s frontendem
+
+# Funkce pro sledování využití paměti
+@app.route("/api/memory", methods=["GET"])
+def memory_usage():
+    mem = psutil.virtual_memory()  # Získání informací o RAM
+    return jsonify({
+        "total": mem.total / 1024**2,      # Celková RAM v MB
+        "used": mem.used / 1024**2,        # Použitá RAM v MB
+        "available": mem.available / 1024**2,  # Dostupná RAM v MB
+        "percent": mem.percent             # Procento využití
+    })
 
 # Funkce pro načítání dokumentů
 def load_documents_from_directory(directory_path):
