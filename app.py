@@ -8,78 +8,61 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 # Použití proměnné prostředí pro OpenAI API klíč
-openai.api_key = os.getenv("OPENAI_API_KEY")  # Načítáme API klíč z prostředí
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 client = chromadb.Client()
 collection_name = "dokumenty_kolekce"
 collection = client.get_or_create_collection(name=collection_name)
 
 app = Flask(__name__)
-CORS(app)  # Povolení CORS pro komunikaci s frontendem
+CORS(app)
 
 # Funkce pro sledování využití paměti
 @app.route("/api/memory", methods=["GET"])
 def memory_usage():
-    mem = psutil.virtual_memory()  # Získání informací o RAM
+    mem = psutil.virtual_memory()
     return jsonify({
-        "total": mem.total / 1024**2,      # Celková RAM v MB
-        "used": mem.used / 1024**2,        # Použitá RAM v MB
-        "available": mem.available / 1024**2,  # Dostupná RAM v MB
-        "percent": mem.percent             # Procento využití
+        "total": mem.total / 1024**2,
+        "used": mem.used / 1024**2,
+        "available": mem.available / 1024**2,
+        "percent": mem.percent
     })
 
-# Funkce pro načítání dokumentů
+# Funkce pro iterativní načítání dokumentů (nižší spotřeba RAM)
 def load_documents_from_directory(directory_path):
-    documents = []
     for filename in os.listdir(directory_path):
         if filename.endswith(".docx"):
             doc_path = os.path.join(directory_path, filename)
             document = Document(doc_path)
-            content = "\n".join([para.text for para in document.paragraphs if para.text.strip() != ""])
-            documents.append((filename, content))
-    return documents
+            content = "\n".join(para.text for para in document.paragraphs if para.text.strip())
+            yield filename, content  # Generátor místo uložení do listu
 
-# Funkce pro dělení textu
+# Funkce pro dělení textu na menší části
 def split_text(text, max_tokens=1000):
     enc = tiktoken.get_encoding("cl100k_base")
     tokens = enc.encode(text)
-    chunks = [tokens[i:i + max_tokens] for i in range(0, len(tokens), max_tokens)]
-    return [enc.decode(chunk) for chunk in chunks]
+    for i in range(0, len(tokens), max_tokens):
+        yield enc.decode(tokens[i:i + max_tokens])  # Generátor místo seznamu
 
 # Funkce pro vytvoření embeddingů a jejich uložení do ChromaDB
-def create_embeddings(documents):
-    for doc_name, content in documents:
-        text_chunks = split_text(content, max_tokens=1000)
-        embeddings = []
-        ids = []
-        metadatas = []
-        documents_list = []
-
-        for i, chunk in enumerate(text_chunks):
+def create_embeddings(directory_path):
+    for doc_name, content in load_documents_from_directory(directory_path):
+        for i, chunk in enumerate(split_text(content, max_tokens=1000)):
             response = openai.embeddings.create(input=[chunk], model="text-embedding-ada-002")
-            embedding = response.data[0].embedding  # Nový přístup k embeddingu
-            ids.append(f"{doc_name}_{i}")  # Každý chunk dostane unikátní ID
-            embeddings.append(embedding)  # Přidáváme embedding
-            metadatas.append({"source": doc_name})  # Přidáváme metadata
-            documents_list.append(chunk)  # Přidáváme dokumenty
-
-        # Přidání do ChromaDB
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            metadatas=metadatas,
-            documents=documents_list
-        )
+            embedding = response.data[0].embedding
+            collection.add(
+                ids=[f"{doc_name}_{i}"],
+                embeddings=[embedding],
+                metadatas=[{"source": doc_name}],
+                documents=[chunk]
+            )
 
 # Funkce pro dotazování do ChromaDB
 def query_chromadb(query, n_results=5):
     response = openai.embeddings.create(input=[query], model="text-embedding-ada-002")
-    query_embedding = response.data[0].embedding  # Nový přístup k embeddingu
+    query_embedding = response.data[0].embedding
     results = collection.query(query_embeddings=[query_embedding], n_results=n_results, include=["documents"])
-    if "documents" in results:
-        return results["documents"]
-    else:
-        return []
+    return results.get("documents", [])
 
 # Funkce pro generování odpovědi
 def generate_answer_with_assistant(query, context_documents):
@@ -118,17 +101,14 @@ def handle_query():
     if not query:
         return jsonify({"error": "Dotaz nesmí být prázdný"}), 400
 
-    documents = load_documents_from_directory("./documents")  # Uprav tuto cestu, pokud soubory nejsou v tomto adresáři
-    if len(collection.get()["documents"]) == 0:
-        create_embeddings(documents)
-    context_documents = query_chromadb(query)
+    # Použití lazy loading - pouze pokud databáze nemá dokumenty
+    if not collection.get()["documents"]:
+        create_embeddings("./documents")
 
+    context_documents = query_chromadb(query)
     loading_message = "Načítám odpověď, prosím čekejte..."
 
-    if context_documents:
-        answer = generate_answer_with_assistant(query, context_documents)
-    else:
-        answer = "Bohužel, odpověď ve své databázi nemám."
+    answer = generate_answer_with_assistant(query, context_documents) if context_documents else "Bohužel, odpověď ve své databázi nemám."
 
     return jsonify({"loading_message": loading_message, "answer": answer})
 
