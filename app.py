@@ -1,140 +1,196 @@
-import os
-import openai
-import chromadb
-from docx import Document
-import tiktoken
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dotazy k penzijku</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
 
-# Použití proměnné prostředí pro OpenAI API klíč
-openai.api_key = "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"  # API klíč by měl být nastaven v prostředí
-client = chromadb.Client()
-collection_name = "dokumenty_kolekce"
-collection = client.get_or_create_collection(name=collection_name)
+        .container {
+            width: 90%;
+            max-width: 800px;
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
 
-app = Flask(__name__)
-CORS(app)  # Povolení CORS pro komunikaci s frontendem
+        h1 {
+            text-align: center;
+            color: #0099cc;
+            margin-bottom: 20px;
+        }
 
+        .chat-history {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding-right: 10px;
+            border-bottom: 1px solid #eee;
+        }
 
-# Funkce pro načítání dokumentů
-def load_documents_from_directory(directory_path):
-    documents = []
-    for filename in os.listdir(directory_path):
-        if filename.endswith(".docx"):
-            doc_path = os.path.join(directory_path, filename)
-            document = Document(doc_path)
-            content = "\n".join([para.text for para in document.paragraphs if para.text.strip() != ""])
-            documents.append((filename, content))
-    return documents
+        .message {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
 
+        .user-message {
+            background-color: #e1f5fe;
+            color: #0099cc;
+            text-align: left;
+        }
 
-# Funkce pro dělení textu
-def split_text(text, max_tokens=1000):
-    enc = tiktoken.get_encoding("cl100k_base")
-    tokens = enc.encode(text)
-    chunks = [tokens[i:i + max_tokens] for i in range(0, len(tokens), max_tokens)]
-    return [enc.decode(chunk) for chunk in chunks]
+        .assistant-message {
+            background-color: #f0f4f8;
+            color: #333;
+            text-align: left;
+            white-space: pre-wrap;  /* Aby se text formátoval správně */
+        }
 
+        textarea {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #0099cc;
+            border-radius: 4px;
+            resize: none;
+        }
 
-# Funkce pro vytvoření embeddingů a jejich uložení do ChromaDB
-def create_embeddings(documents):
-    for doc_name, content in documents:
-        text_chunks = split_text(content, max_tokens=1000)
-        embeddings = []
-        ids = []
-        metadatas = []
-        documents_list = []
+        textarea:focus {
+            outline: none;
+            border-color: #006699;
+        }
 
-        for i, chunk in enumerate(text_chunks):
-            embedding = openai.Embedding.create(input=chunk, model="text-embedding-ada-002")["data"][0]["embedding"]
-            ids.append(f"{doc_name}_{i}")  # Každý chunk dostane unikátní ID
-            embeddings.append(embedding)  # Přidáváme embedding
-            metadatas.append({"source": doc_name})  # Přidáváme metadata
-            documents_list.append(chunk)  # Přidáváme dokumenty
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            background-color: #0099cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
 
-        # Přidání do ChromaDB
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            metadatas=metadatas,
-            documents=documents_list
-        )
+        button:hover {
+            background-color: #0077b3;
+        }
 
+        .error {
+            color: red;
+            text-align: center;
+            margin-top: 10px;
+        }
 
-# Funkce pro dotazování do ChromaDB
-def query_chromadb(query, n_results=5):
-    response = openai.Embedding.create(input=query, model="text-embedding-ada-002")
-    query_embedding = response["data"][0]["embedding"]
-    results = collection.query(query_embeddings=[query_embedding], n_results=n_results, include=["documents"])
-    if "documents" in results:
-        return results["documents"]
-    else:
-        return []
+        /* Indikátor načítání */
+        #loading {
+            display: none;
+            font-size: 18px;
+            color: #007bff;
+            text-align: center;
+        }
 
+        #spinner {
+            display: none;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dotazy k penzijku</h1>
+        <div class="chat-history" id="chatHistory"></div>
+        <div class="input-group">
+            <textarea id="query" placeholder="Co by Vás k penzijku zajímalo?"></textarea>
+        </div>
+        <button onclick="sendMessage()">Odeslat</button>
+        <div id="loading">
+            <p>Načítám odpověď, prosím čekejte...</p>
+            <div id="spinner">🌀 Načítání...</div>
+        </div>
+        <div class="error" id="error"></div>
+    </div>
 
-# Funkce pro generování odpovědi
-def generate_answer_with_assistant(query, context_documents):
-    # Opravený řádek: převod každé položky na řetězec
-    context = "\n\n".join(str(doc) for doc in context_documents)
-    prompt = f"""
-    Jsi asistentka pro helpdesk ve společnosti, která nabízí penzijní spoření. Tvoje odpovědi musí být založeny pouze na následujících informacích z dokumentů. Pokud žádná odpověď není v těchto dokumentech, odpověz: 'Bohužel, odpověď ve své databázi nemám.'
+    <script>
+        async function sendMessage() {
+            const query = document.getElementById('query').value;
+            const errorBox = document.getElementById('error');
+            const chatHistory = document.getElementById('chatHistory');
+            const loadingIndicator = document.getElementById('loading');
+            const spinner = document.getElementById('spinner');
 
-    Kontext dokumentů:
-    {context}
+            errorBox.textContent = "";
 
-    Otázka: {query}
-    Odpověď:
-    """
-    response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[
-        {"role": "system", "content": "Jsi asistentka pro helpdesk ve společnosti, která nabízí penzijní spoření."},
-        {"role": "user", "content": prompt}
-    ], max_tokens=500, temperature=0.7)
+            if (!query.trim()) {
+                errorBox.textContent = "Prosím, napište svůj dotaz.";
+                return;
+            }
 
-    # Získání odpovědi
-    answer = response['choices'][0]['message']['content'].strip()
+            // Přidání dotazu do historie
+            chatHistory.innerHTML += `<div class="message user-message"><strong>Vy:</strong> ${query}</div>`;
+            document.getElementById('query').value = '';  // Vymazání textového pole
 
-    # Přidání dotazu, zda může ještě s něčím pomoci
-    answer += "\nMohu Vám ještě s něčím pomoci?"
+            // Zobrazíme indikátor načítání
+            loadingIndicator.style.display = 'block';
+            spinner.style.display = 'block';
 
-    # Zkrácení odpovědi na poslední větu
-    if len(answer) > 300:  # Například zkracujeme pokud je odpověď dlouhá
-        # Zkrátíme odpověď na poslední celou větu
-        answer = answer.rsplit('.', 1)[0] + '.'
+            try {
+                const response = await fetch("https://chatgpt-api-bawc.onrender.com", { // URL API upraveno na správnou adresu
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ query: query })
+                });
 
-    return answer
+                if (!response.ok) {
+                    throw new Error(`Chyba: ${response.status} ${response.statusText}`);
+                }
 
+                const data = await response.json();
+                if (data.answer) {
+                    // Postupné zobrazování odpovědi po znacích
+                    const answer = data.answer;
+                    chatHistory.innerHTML += `<div class="message assistant-message"><strong>Asistentka:</strong> </div>`;
+                    let charIndex = 0;
+                    const messageDiv = chatHistory.lastElementChild;
+                    
+                    function addCharacter() {
+                        if (charIndex < answer.length) {
+                            messageDiv.innerHTML += answer.charAt(charIndex);
+                            charIndex++;
+                            setTimeout(addCharacter, 20); // Zpoždění 20ms mezi znaky
+                        }
+                    }
 
-# API cesta pro kořenovou URL
-@app.route("/", methods=["GET"])
-def home():
-    return "Aplikace běží!"
-
-
-# API cesta pro chat
-@app.route("/api/chat", methods=["POST"])
-def handle_query():
-    data = request.get_json()
-    query = data.get("query")
-
-    if not query:
-        return jsonify({"error": "Dotaz nesmí být prázdný"}), 400
-
-    documents = load_documents_from_directory("C:/Programy/Python/dokumenty")
-    # Vytvořit embeddingy pouze pokud neexistují
-    if len(collection.get()["documents"]) == 0:
-        create_embeddings(documents)  # Načtení dokumentů a uložení embeddingů
-    context_documents = query_chromadb(query)
-
-    # Přidání indikátoru načítání
-    loading_message = "Načítám odpověď, prosím čekejte..."
-
-    if context_documents:
-        answer = generate_answer_with_assistant(query, context_documents)
-    else:
-        answer = "Bohužel, odpověď ve své databázi nemám."
-
-    return jsonify({"loading_message": loading_message, "answer": answer})
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+                    addCharacter();
+                    chatHistory.scrollTop = chatHistory.scrollHeight;  // Scroll na konec chat history
+                } else if (data.error) {
+                    errorBox.textContent = data.error;
+                } else {
+                    errorBox.textContent = "Neznámá chyba při zpracování odpovědi.";
+                }
+            } catch (error) {
+                errorBox.textContent = "Chyba při komunikaci se serverem: " + error.message;
+            } finally {
+                // Skrytí indikátoru načítání po obdržení odpovědi
+                loadingIndicator.style.display = 'none';
+                spinner.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
