@@ -44,8 +44,8 @@ def create_embeddings(documents):
         documents_list = []
 
         for i, chunk in enumerate(text_chunks):
-            response = openai.Embedding.create(input=chunk, model="text-embedding-ada-002")
-            embedding = response["data"][0]["embedding"]  # Opravený přístup k embeddingu
+            response = openai.embeddings.create(input=[chunk], model="text-embedding-ada-002")
+            embedding = response.data[0].embedding  # Nový přístup k embeddingu
             ids.append(f"{doc_name}_{i}")  # Každý chunk dostane unikátní ID
             embeddings.append(embedding)  # Přidáváme embedding
             metadatas.append({"source": doc_name})  # Přidáváme metadata
@@ -61,8 +61,8 @@ def create_embeddings(documents):
 
 # Funkce pro dotazování do ChromaDB
 def query_chromadb(query, n_results=5):
-    response = openai.Embedding.create(input=query, model="text-embedding-ada-002")
-    query_embedding = response["data"][0]["embedding"]  # Opravený přístup k embeddingu
+    response = openai.embeddings.create(input=[query], model="text-embedding-ada-002")
+    query_embedding = response.data[0].embedding  # Nový přístup k embeddingu
     results = collection.query(query_embeddings=[query_embedding], n_results=n_results, include=["documents"])
     if "documents" in results:
         return results["documents"]
@@ -81,12 +81,12 @@ def generate_answer_with_assistant(query, context_documents):
     Otázka: {query}
     Odpověď:
     """
-    response = openai.ChatCompletion.create(model="gpt-3.5-turbo", messages=[
+    response = openai.chat.completions.create(model="gpt-3.5-turbo", messages=[
         {"role": "system", "content": "Jsi asistentka pro helpdesk ve společnosti, která nabízí penzijní spoření."},
         {"role": "user", "content": prompt}
     ], max_tokens=500, temperature=0.7)
 
-    answer = response["choices"][0]["message"]["content"].strip()
+    answer = response.choices[0].message.content.strip()
     answer += "\nMohu Vám ještě s něčím pomoci?"
     if len(answer) > 300:
         answer = answer.rsplit('.', 1)[0] + '.'
