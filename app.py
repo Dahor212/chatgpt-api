@@ -7,7 +7,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 # Použití proměnné prostředí pro OpenAI API klíč
-openai.api_key = "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"  # Změň na svůj API klíč
+openai.api_key = os.getenv("OPENAI_API_KEY")  # Načítáme API klíč z prostředí
+
 client = chromadb.Client()
 collection_name = "dokumenty_kolekce"
 collection = client.get_or_create_collection(name=collection_name)
