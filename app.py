@@ -84,16 +84,13 @@ def generate_answer_with_assistant(query, context_documents):
     """
 
     # Zavoláme OpenAI model pro generování odpovědi
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Jsi asistentka pro helpdesk ve společnosti, která nabízí penzijní spoření."},
-            {"role": "user", "content": prompt}
-        ],
+    response = openai.Completion.create(
+        model="text-davinci-003",  # nebo použijte jiný model dle potřeby
+        prompt=prompt,
         max_tokens=500,
         temperature=0.7
     )
-    answer = response.choices[0].message['content'].strip()
+    answer = response.choices[0].text.strip()
     
     # Pokud odpověď je příliš dlouhá, omezíme ji
     if len(answer) > 300:
