@@ -4,6 +4,7 @@ import chromadb
 import psutil
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import openai
 
 # Inicializace ChromaDB
 client = chromadb.PersistentClient(path="./chroma_db")
@@ -39,20 +40,13 @@ def query_chromadb(query, n_results=5):
     # Načteme embeddingy z GitHubu
     embeddings_data = load_embeddings_from_github()
 
-    # Předpokládáme, že máte embeddingy jako vektorové reprezentace dokumentů uložené v embeddings_data
-    # Představme si, že máte query embedding (například z OpenAI) a porovnáváme ho s embeddingy dokumentů
-
     # Představme si, že query_embedding je již získaný embedding pro dotaz
-    # Například:
-    # query_embedding = some_function_to_get_embedding(query)
-
     query_embedding = [0.1, 0.2, 0.3]  # Příklad embeddingu pro dotaz
 
     # Prohledáme embeddingy z GitHubu a vrátíme dokumenty s nejbližšími vektory
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
         for embedding in doc_embeddings:
-            # Vypočteme vzdálenost mezi query embeddingem a embeddingem dokumentu
             similarity = cosine_similarity(query_embedding, embedding)
             results.append({
                 "document": doc_name,
@@ -73,9 +67,12 @@ def cosine_similarity(vec1, vec2):
         return 0
     return dot_product / (magnitude1 * magnitude2)
 
-# Generování odpovědi
+# Generování odpovědi s využitím GPT modelu
 def generate_answer_with_assistant(query, context_documents):
-    context = "\n\n".join(str(doc['document']) for doc in context_documents)
+    if not context_documents:
+        return "Bohužel, odpověď ve své databázi nemám."
+    
+    context = "\n\n".join([doc['document'] for doc in context_documents])
     prompt = f"""
     Jsi asistentka pro helpdesk ve společnosti, která nabízí penzijní spoření. Tvoje odpovědi musí být založeny pouze na následujících informacích z dokumentů. Pokud žádná odpověď není v těchto dokumentech, odpověz: 'Bohužel, odpověď ve své databázi nemám.'
     
@@ -85,9 +82,24 @@ def generate_answer_with_assistant(query, context_documents):
     Otázka: {query}
     Odpověď:
     """
-    # Předpokládáme, že používáte nějaký chatovací model k odpovědi
-    response = "Toto je generovaná odpověď na dotaz, založená na podobných dokumentech."
-    return response
+
+    # Zavoláme OpenAI model pro generování odpovědi
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "Jsi asistentka pro helpdesk ve společnosti, která nabízí penzijní spoření."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=500,
+        temperature=0.7
+    )
+    answer = response.choices[0].message['content'].strip()
+    
+    # Pokud odpověď je příliš dlouhá, omezíme ji
+    if len(answer) > 300:
+        answer = answer.rsplit('.', 1)[0] + '.'
+    
+    return answer
 
 @app.route("/", methods=["GET"])
 def home():
@@ -102,7 +114,10 @@ def handle_query():
 
     # Vyhledáme relevantní dokumenty z GitHubu
     context_documents = query_chromadb(query)
-    answer = generate_answer_with_assistant(query, context_documents) if context_documents else "Bohužel, odpověď ve své databázi nemám."
+    
+    # Generujeme odpověď na základě kontextu dokumentů
+    answer = generate_answer_with_assistant(query, context_documents)
+    
     return jsonify({"answer": answer})
 
 if __name__ == "__main__":
