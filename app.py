@@ -37,10 +37,14 @@ def load_embeddings_from_github():
     else:
         raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
 
+# Simulace embeddingu dotazu (náhrada za OpenAI API)
+def fake_embedding(query):
+    return [ord(c) % 10 / 10.0 for c in query][:50]  # Vygeneruje jednoduchý vektor na základě ASCII hodnot znaků
+
 # Vyhledání relevantních dokumentů v ChromaDB na základě embeddingů z GitHubu
 def query_chromadb(query, n_results=5):
     embeddings_data = load_embeddings_from_github()
-    query_embedding = [0.1, 0.2, 0.3]  # Příklad embeddingu pro dotaz
+    query_embedding = fake_embedding(query)  # Použití lokálního generátoru místo OpenAI API
 
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
