@@ -6,13 +6,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
 
-# Nastavení OpenAI API klíče
-openai.api_key = os.getenv("OPENAI_API_KEY")  # Musíš mít správně nastavený API klíč
+# Nastavení OpenAI API klienta
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Inicializace ChromaDB
-client = chromadb.PersistentClient(path="./chroma_db")
+client_chroma = chromadb.PersistentClient(path="./chroma_db")
 collection_name = "dokumenty_kolekce"
-collection = client.get_or_create_collection(name=collection_name)
+collection = client_chroma.get_or_create_collection(name=collection_name)
 
 app = Flask(__name__)
 CORS(app)
@@ -64,7 +64,7 @@ def cosine_similarity(vec1, vec2):
         return 0
     return dot_product / (magnitude1 * magnitude2)
 
-# Generování odpovědi s využitím GPT-4 nebo GPT-3.5-turbo
+# Generování odpovědi s využitím GPT-3.5-turbo
 def generate_answer_with_assistant(query, context_documents):
     if not context_documents:
         return "Bohužel, odpověď ve své databázi nemám."
@@ -77,13 +77,13 @@ def generate_answer_with_assistant(query, context_documents):
     ]
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",  # Můžeš změnit na "gpt-3.5-turbo" podle potřeby
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
             messages=messages,
             max_tokens=500,
             temperature=0.7
         )
-        answer = response["choices"][0]["message"]["content"].strip()
+        answer = response.choices[0].message.content.strip()
     except Exception as e:
         return f"Chyba při generování odpovědi: {str(e)}"
 
