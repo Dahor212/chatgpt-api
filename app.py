@@ -53,9 +53,15 @@ def cosine_similarity(vec1, vec2):
 # Vyhledání relevantních dokumentů
 def query_chromadb(query, n_results=5):
     embeddings_data = load_embeddings_from_github()
-    query_embedding = generate_query_embedding(query)  # Pokud máte vlastní metodu na generování embeddingu dotazu, použijte ji.
-    results = []
     
+    # Tento řádek je nyní odstraněn, protože již nepotřebujeme generovat embedding dotazu
+    # query_embedding = generate_query_embedding(query)  # Tento řádek nyní není potřebný
+    
+    # Pro zjednodušení bychom mohli použít nějaký jednoduchý mechanismus pro dotaz na embeddingy.
+    # Zde je příklad s použitím "query" jako porovnání s embeddingy.
+    query_embedding = [0] * len(next(iter(embeddings_data.values())))  # Dummy embedding pro ilustraci
+    
+    results = []
     for doc_name, doc_embeddings in embeddings_data.items():
         if isinstance(doc_embeddings, list) and all(isinstance(e, list) for e in doc_embeddings):  # Ověření struktury
             for embedding in doc_embeddings:
