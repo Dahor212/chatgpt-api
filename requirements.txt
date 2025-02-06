@@ -14,7 +14,7 @@ colorama==0.4.6
 coloredlogs==15.0.1
 Deprecated==1.2.18
 distro==1.9.0
-dotenv
+python-dotenv
 durationpy==0.9
 faiss-cpu==1.9.0.post1
 fastapi==0.115.8
