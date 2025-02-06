@@ -5,6 +5,7 @@ import psutil
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
+import json  # Přidání pro ladění JSON dat
 
 # Nastavení OpenAI API klienta
 client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -33,7 +34,9 @@ def load_embeddings_from_github():
     url = "https://raw.githubusercontent.com/Dahor212/chatgpt-api/refs/heads/main/Embeddingy/embeddings.json"
     response = requests.get(url)
     if response.status_code == 200:
-        return response.json()
+        embeddings_data = response.json()
+        print(f"Načtené embeddingy (ukázka): {json.dumps(embeddings_data)[:500]}")  # Prvních 500 znaků pro kontrolu
+        return embeddings_data
     else:
         raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
 
@@ -55,17 +58,16 @@ def query_chromadb(query, n_results=5):
     query_embedding = generate_query_embedding(query)
     results = []
     
-    for doc_name, doc_data in embeddings_data.items():
-        doc_embeddings = doc_data.get("embeddings", [])
-        doc_text = doc_data.get("text", "")  # Přidání textu dokumentu
-        
-        for embedding in doc_embeddings:
-            similarity = cosine_similarity(query_embedding, embedding)
-            results.append({
-                "document": doc_name,
-                "similarity": similarity,
-                "content": doc_text  # Ukládáme celý obsah dokumentu
-            })
+    for doc_name, doc_embeddings in embeddings_data.items():
+        if isinstance(doc_embeddings, list):  # Ověření, že obsahuje seznam embeddingů
+            for embedding in doc_embeddings:
+                similarity = cosine_similarity(query_embedding, embedding)
+                results.append({
+                    "document": doc_name,
+                    "similarity": similarity
+                })
+        else:
+            print(f"Varování: Neočekávaný formát embeddingů pro {doc_name}")
     
     results = sorted(results, key=lambda x: x['similarity'], reverse=True)
     return results[:n_results]
@@ -75,7 +77,7 @@ def generate_answer_with_assistant(query, context_documents):
     if not context_documents:
         return "Bohužel, odpověď ve své databázi nemám."
 
-    context = "\n\n".join([doc['content'] for doc in context_documents])
+    context = "\n\n".join([doc['document'] for doc in context_documents])
     print(f"Použitý kontext pro dotaz: {context}")
 
     messages = [
