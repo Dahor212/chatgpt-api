@@ -113,4 +113,5 @@ def handle_query():
     return jsonify({"answer": answer})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)), debug=True, workers=2)
+    port = int(os.getenv("PORT", 10000))  # Použití dynamického portu
+    app.run(host="0.0.0.0", port=port, debug=True)  # Odebrání workers=2, debug=True užívá jen 1 worker
