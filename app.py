@@ -36,26 +36,21 @@ def memory_usage():
 # Načtení embeddingů dokumentů z GitHubu
 def load_embeddings_from_github():
     url = "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/embeddings.json"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        embeddings_data = response.json()
-        if not isinstance(embeddings_data, dict):
-            print("⚠️ Chyba: Načtený soubor nemá správný formát JSON.")
+    response = requests.get(url)
+    if response.status_code == 200:
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            print("⚠️ Chyba: Embeddingy nelze dekódovat jako JSON.")
             return {}
-        return embeddings_data
-    except requests.RequestException as e:
-        print(f"⚠️ Chyba při načítání embeddingů: {e}")
-        return {}
-    except json.JSONDecodeError:
-        print("⚠️ Chyba: Embeddingy nelze dekódovat jako JSON.")
+    else:
+        print(f"⚠️ Chyba při načítání embeddingů: {response.status_code}")
         return {}
 
 # Výpočet kosinové podobnosti mezi dvěma vektory
 def cosine_similarity(vec1, vec2):
-    vec1 = np.array(vec1, dtype=np.float32)
-    vec2 = np.array(vec2, dtype=np.float32)
-
+    vec1 = np.array(vec1, dtype=float)
+    vec2 = np.array(vec2, dtype=float)
     if vec1.shape != vec2.shape:
         return 0  # Pokud jsou různé délky, vrátíme 0
     dot_product = np.dot(vec1, vec2)
@@ -72,12 +67,7 @@ def query_chromadb(query, n_results=5):
 
     # Náhradní embedding dotazu (musí mít stejnou délku jako dokumenty)
     first_doc_embedding = next(iter(embeddings_data.values()))
-    if not first_doc_embedding:
-        print("⚠️ Chyba: Žádné embeddingy nejsou dostupné.")
-        return []
-    
-    embedding_length = len(first_doc_embedding[0])
-    query_embedding = np.zeros(embedding_length).tolist()  # Správné vytvoření nulového vektoru
+    query_embedding = np.zeros_like(first_doc_embedding[0]).tolist()  # Správné vytvoření nulového vektoru
 
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
@@ -100,7 +90,7 @@ def generate_answer_with_gpt(query, context_documents):
     prompt = f"Na základě následujících dokumentů odpověz na dotaz:\n\n{context_texts}\n\nDotaz: {query}\nOdpověď:"
 
     try:
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4-turbo",
             messages=[
                 {"role": "system", "content": "Jsi AI asistent, který odpovídá na základě dokumentů."},
@@ -109,8 +99,8 @@ def generate_answer_with_gpt(query, context_documents):
             max_tokens=500,
             temperature=0.7
         )
-        return response.choices[0].message.content
-    except openai.OpenAIError as e:
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
         print(f"⚠️ Chyba při volání OpenAI API: {str(e)}")
         return "Došlo k chybě při generování odpovědi."
 
