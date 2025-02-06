@@ -2,22 +2,21 @@ import os
 import requests
 import chromadb
 import psutil
+import openai
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
-from sentence_transformers import SentenceTransformer  # Knihovna pro generování embeddingu pro dotaz
-import openai  # Knihovna pro volání GPT modelu
+from dotenv import load_dotenv
+
+# Načtení API klíče z .env souboru
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai.api_key = OPENAI_API_KEY
 
 # Inicializace ChromaDB
 client_chroma = chromadb.PersistentClient(path="./chroma_db")
 collection_name = "dokumenty_kolekce"
 collection = client_chroma.get_or_create_collection(name=collection_name)
-
-# Inicializace modelu pro generování embeddingu pro dotaz
-embedder = SentenceTransformer('all-MiniLM-L6-v2')  # Můžete použít jiný model dle potřeby
-
-# Inicializace OpenAI API
-openai.api_key = os.getenv("OPENAI_API_KEY")  # Ujistěte se, že máte nastavený API klíč pro OpenAI
 
 app = Flask(__name__)
 CORS(app)
@@ -34,12 +33,10 @@ def memory_usage():
     })
 
 # Načtení embeddingů z GitHubu
-def load_embeddings_from_github():
-    url = "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/embeddings.json"
+def load_embeddings_from_github(url):
     response = requests.get(url)
     if response.status_code == 200:
-        embeddings_data = response.json()
-        return embeddings_data
+        return response.json()
     else:
         raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
 
@@ -50,16 +47,24 @@ def cosine_similarity(vec1, vec2):
     magnitude2 = sum(b * b for b in vec2) ** 0.5
     return dot_product / (magnitude1 * magnitude2) if magnitude1 and magnitude2 else 0
 
-# Vyhledání relevantních dokumentů
+# Funkce pro vyhledání relevantních dokumentů
 def query_chromadb(query, n_results=5):
-    embeddings_data = load_embeddings_from_github()
+    embeddings_data = load_embeddings_from_github(
+        "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/embeddings.json"
+    )
+    query_embeddings_data = load_embeddings_from_github(
+        "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/query_embeddings.json"
+    )
 
-    # Generování embeddingu pro dotaz
-    query_embedding = embedder.encode([query])[0]  # Generování embeddingu pro dotaz
+    # Získání embeddingu dotazu (pokud existuje)
+    query_embedding = query_embeddings_data.get(query)
+    if query_embedding is None:
+        print(f"Varování: Pro dotaz '{query}' nebyl nalezen embedding.")
+        return []
 
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
-        if isinstance(doc_embeddings, list) and all(isinstance(e, list) for e in doc_embeddings):  # Ověření struktury
+        if isinstance(doc_embeddings, list) and all(isinstance(e, list) for e in doc_embeddings):
             for embedding in doc_embeddings:
                 similarity = cosine_similarity(query_embedding, embedding)
                 results.append({
@@ -72,23 +77,28 @@ def query_chromadb(query, n_results=5):
     results = sorted(results, key=lambda x: x['similarity'], reverse=True)
     return results[:n_results]
 
-# Volání OpenAI API pro generování odpovědi na základě kontextu
+# Generování odpovědi pomocí GPT-4
 def generate_answer_with_gpt(query, context_documents):
     if not context_documents:
         return "Bohužel, odpověď ve své databázi nemám."
 
-    # Sestavení kontextu pro GPT
-    context = "\n\n".join([doc['document'] for doc in context_documents])
+    context_texts = "\n\n".join([doc['document'] for doc in context_documents])
+    prompt = f"Na základě následujících dokumentů odpověz na dotaz:\n\n{context_texts}\n\nDotaz: {query}\nOdpověď:"
 
-    # Volání OpenAI API pro generování odpovědi na základě kontextu
-    response = openai.Completion.create(
-        engine="text-davinci-003",  # Nebo jiný model dle potřeby
-        prompt=f"Na základě následujícího kontextu odpověz na tento dotaz:\n\nKontext:\n{context}\n\nDotaz: {query}\n\nOdpověď:",
-        max_tokens=200,  # Počet tokenů pro odpověď
-        temperature=0.7  # Nastavení pro kreativitu odpovědi
-    )
-
-    return response.choices[0].text.strip()
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "Jsi AI asistent, který odpovídá na základě dokumentů."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        print(f"Chyba při volání OpenAI API: {str(e)}")
+        return "Došlo k chybě při generování odpovědi."
 
 @app.route("/", methods=["GET"])
 def home():
