@@ -4,8 +4,7 @@ import chromadb
 import psutil
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import json
-from docx import Document  # Knihovna pro načítání .docx dokumentů
+import json  # Přidání pro ladění JSON dat
 
 # Inicializace ChromaDB
 client_chroma = chromadb.PersistentClient(path="./chroma_db")
@@ -26,33 +25,23 @@ def memory_usage():
         "percent": mem.percent
     })
 
-# Načtení embeddingů a obsahu dokumentů z GitHubu
+# Načtení embeddingů z GitHubu
 def load_embeddings_from_github():
     url = "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/embeddings.json"
     response = requests.get(url)
     if response.status_code == 200:
         embeddings_data = response.json()
 
+        # Oprava struktury pro kompatibilitu
         if isinstance(embeddings_data, dict) and "document" in embeddings_data and "embeddings" in embeddings_data:
             document_name = embeddings_data["document"]
             document_embeddings = embeddings_data["embeddings"]
             return {document_name: document_embeddings}
-
+        
         print(f"Načtené embeddingy (ukázka): {json.dumps(embeddings_data)[:500]}")
         return embeddings_data
     else:
         raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
-
-# Načtení obsahu dokumentu .docx
-def load_document_content(doc_name):
-    doc_path = f"./dokumenty/{doc_name}"
-    try:
-        doc = Document(doc_path)
-        text = "\n".join([para.text for para in doc.paragraphs])
-        return text
-    except Exception as e:
-        print(f"Chyba při načítání dokumentu {doc_name}: {e}")
-        return ""
 
 # Výpočet kosinové podobnosti mezi dvěma vektory
 def cosine_similarity(vec1, vec2):
@@ -64,18 +53,21 @@ def cosine_similarity(vec1, vec2):
 # Vyhledání relevantních dokumentů
 def query_chromadb(query, n_results=5):
     embeddings_data = load_embeddings_from_github()
-    
+
+    # Tento řádek je nyní odstraněn, protože již nepotřebujeme generovat embedding dotazu
     query_embedding = [0] * len(next(iter(embeddings_data.values())))  # Dummy embedding pro ilustraci
-    
+
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
-        if isinstance(doc_embeddings, list) and all(isinstance(e, list) for e in doc_embeddings):
+        if isinstance(doc_embeddings, list) and all(isinstance(e, list) for e in doc_embeddings):  # Ověření struktury
             for embedding in doc_embeddings:
                 similarity = cosine_similarity(query_embedding, embedding)
                 results.append({
                     "document": doc_name,
                     "similarity": similarity
                 })
+        else:
+            print(f"Varování: Neočekávaný formát embeddingů pro {doc_name}")
 
     results = sorted(results, key=lambda x: x['similarity'], reverse=True)
     return results[:n_results]
@@ -85,13 +77,10 @@ def generate_answer_with_context(query, context_documents):
     if not context_documents:
         return "Bohužel, odpověď ve své databázi nemám."
 
-    # Získání obsahu dokumentu
-    document_name = context_documents[0]['document']
-    document_content = load_document_content(document_name)
-    
-    print(f"Použitý kontext pro dotaz: {document_content}")
+    context = "\n\n".join([doc['document'] for doc in context_documents])
+    print(f"Použitý kontext pro dotaz: {context}")
 
-    return document_content  # Vrátí text dokumentu
+    return context  # Zde můžete upravit na vlastní logiku odpovědi bez GPT
 
 @app.route("/", methods=["GET"])
 def home():
