@@ -4,6 +4,7 @@ gunicorn==21.2.0
 requests==2.31.0
 numpy==1.26.3  # Starší verze kompatibilní s chromadb
 chromadb==0.4.5
-openai==1.3.5
+openai==1.2.0
 python-dotenv==1.0.0
 psutil==5.9.5
+httpx==0.25.0
