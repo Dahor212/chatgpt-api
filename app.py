@@ -4,12 +4,20 @@ import chromadb
 import psutil
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import json  # Přidání pro ladění JSON dat
+import json
+from sentence_transformers import SentenceTransformer  # Knihovna pro generování embeddingu pro dotaz
+import openai  # Knihovna pro volání GPT modelu
 
 # Inicializace ChromaDB
 client_chroma = chromadb.PersistentClient(path="./chroma_db")
 collection_name = "dokumenty_kolekce"
 collection = client_chroma.get_or_create_collection(name=collection_name)
+
+# Inicializace modelu pro generování embeddingu pro dotaz
+embedder = SentenceTransformer('all-MiniLM-L6-v2')  # Můžete použít jiný model dle potřeby
+
+# Inicializace OpenAI API
+openai.api_key = os.getenv("OPENAI_API_KEY")  # Ujistěte se, že máte nastavený API klíč pro OpenAI
 
 app = Flask(__name__)
 CORS(app)
@@ -31,14 +39,6 @@ def load_embeddings_from_github():
     response = requests.get(url)
     if response.status_code == 200:
         embeddings_data = response.json()
-
-        # Oprava struktury pro kompatibilitu
-        if isinstance(embeddings_data, dict) and "document" in embeddings_data and "embeddings" in embeddings_data:
-            document_name = embeddings_data["document"]
-            document_embeddings = embeddings_data["embeddings"]
-            return {document_name: document_embeddings}
-        
-        print(f"Načtené embeddingy (ukázka): {json.dumps(embeddings_data)[:500]}")
         return embeddings_data
     else:
         raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
@@ -54,8 +54,8 @@ def cosine_similarity(vec1, vec2):
 def query_chromadb(query, n_results=5):
     embeddings_data = load_embeddings_from_github()
 
-    # Tento řádek je nyní odstraněn, protože již nepotřebujeme generovat embedding dotazu
-    query_embedding = [0] * len(next(iter(embeddings_data.values())))  # Dummy embedding pro ilustraci
+    # Generování embeddingu pro dotaz
+    query_embedding = embedder.encode([query])[0]  # Generování embeddingu pro dotaz
 
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
@@ -72,15 +72,23 @@ def query_chromadb(query, n_results=5):
     results = sorted(results, key=lambda x: x['similarity'], reverse=True)
     return results[:n_results]
 
-# Generování odpovědi s využitím předpřipraveného kontextu
-def generate_answer_with_context(query, context_documents):
+# Volání OpenAI API pro generování odpovědi na základě kontextu
+def generate_answer_with_gpt(query, context_documents):
     if not context_documents:
         return "Bohužel, odpověď ve své databázi nemám."
 
+    # Sestavení kontextu pro GPT
     context = "\n\n".join([doc['document'] for doc in context_documents])
-    print(f"Použitý kontext pro dotaz: {context}")
 
-    return context  # Zde můžete upravit na vlastní logiku odpovědi bez GPT
+    # Volání OpenAI API pro generování odpovědi na základě kontextu
+    response = openai.Completion.create(
+        engine="text-davinci-003",  # Nebo jiný model dle potřeby
+        prompt=f"Na základě následujícího kontextu odpověz na tento dotaz:\n\nKontext:\n{context}\n\nDotaz: {query}\n\nOdpověď:",
+        max_tokens=200,  # Počet tokenů pro odpověď
+        temperature=0.7  # Nastavení pro kreativitu odpovědi
+    )
+
+    return response.choices[0].text.strip()
 
 @app.route("/", methods=["GET"])
 def home():
@@ -94,7 +102,7 @@ def handle_query():
         return jsonify({"error": "Dotaz nesmí být prázdný"}), 400
 
     context_documents = query_chromadb(query)
-    answer = generate_answer_with_context(query, context_documents)
+    answer = generate_answer_with_gpt(query, context_documents)
     
     return jsonify({"answer": answer})
 
