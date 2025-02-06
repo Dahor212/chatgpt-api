@@ -3,6 +3,7 @@ import requests
 import chromadb
 import psutil
 import openai
+import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
@@ -36,17 +37,24 @@ def load_embeddings_from_github():
     url = "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/embeddings.json"
     response = requests.get(url)
     if response.status_code == 200:
-        embeddings_data = response.json()
-        return embeddings_data
+        try:
+            return response.json()
+        except json.JSONDecodeError:
+            print("⚠️ Chyba: Embeddingy nelze dekódovat jako JSON.")
+            return {}
     else:
         print(f"⚠️ Chyba při načítání embeddingů: {response.status_code}")
-        return {}  # Vrátíme prázdný slovník místo vyhození chyby
+        return {}
 
 # Výpočet kosinové podobnosti mezi dvěma vektory
 def cosine_similarity(vec1, vec2):
-    dot_product = sum(a * b for a, b in zip(vec1, vec2))
-    magnitude1 = sum(a * a for a in vec1) ** 0.5
-    magnitude2 = sum(b * b for b in vec2) ** 0.5
+    vec1 = np.array(vec1)
+    vec2 = np.array(vec2)
+    if vec1.shape != vec2.shape:
+        return 0  # Pokud jsou různé délky, vrátíme 0
+    dot_product = np.dot(vec1, vec2)
+    magnitude1 = np.linalg.norm(vec1)
+    magnitude2 = np.linalg.norm(vec2)
     return dot_product / (magnitude1 * magnitude2) if magnitude1 and magnitude2 else 0
 
 # Vyhledání relevantních dokumentů
@@ -58,7 +66,7 @@ def query_chromadb(query, n_results=5):
 
     # Náhradní embedding dotazu (musí mít stejnou délku jako dokumenty)
     first_doc_embedding = next(iter(embeddings_data.values()))
-    query_embedding = [0] * len(first_doc_embedding[0])  # Vezmeme délku prvního vektoru
+    query_embedding = np.zeros_like(first_doc_embedding[0]).tolist()  # Správné vytvoření nulového vektoru
 
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
@@ -112,4 +120,4 @@ def handle_query():
     return jsonify({"answer": answer})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)), debug=True, workers=2)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)), debug=True)
