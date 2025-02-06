@@ -31,11 +31,18 @@ def memory_usage():
 
 # Načtení embeddingů a obsahu dokumentů z GitHubu
 def load_embeddings_from_github():
-    url = "https://raw.githubusercontent.com/Dahor212/chatgpt-api/refs/heads/main/Embeddingy/embeddings.json"
+    url = "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/embeddings.json"
     response = requests.get(url)
     if response.status_code == 200:
         embeddings_data = response.json()
-        print(f"Načtené embeddingy (ukázka): {json.dumps(embeddings_data)[:500]}")  # Prvních 500 znaků pro kontrolu
+
+        # Oprava struktury pro kompatibilitu
+        if isinstance(embeddings_data, dict) and "document" in embeddings_data and "embeddings" in embeddings_data:
+            document_name = embeddings_data["document"]
+            document_embeddings = embeddings_data["embeddings"]
+            return {document_name: document_embeddings}
+        
+        print(f"Načtené embeddingy (ukázka): {json.dumps(embeddings_data)[:500]}")
         return embeddings_data
     else:
         raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
@@ -52,14 +59,14 @@ def cosine_similarity(vec1, vec2):
     magnitude2 = sum(b * b for b in vec2) ** 0.5
     return dot_product / (magnitude1 * magnitude2) if magnitude1 and magnitude2 else 0
 
-# Vyhledání relevantních dokumentů v ChromaDB
+# Vyhledání relevantních dokumentů
 def query_chromadb(query, n_results=5):
     embeddings_data = load_embeddings_from_github()
     query_embedding = generate_query_embedding(query)
     results = []
     
     for doc_name, doc_embeddings in embeddings_data.items():
-        if isinstance(doc_embeddings, list):  # Ověření, že obsahuje seznam embeddingů
+        if isinstance(doc_embeddings, list) and all(isinstance(e, list) for e in doc_embeddings):  # Ověření struktury
             for embedding in doc_embeddings:
                 similarity = cosine_similarity(query_embedding, embedding)
                 results.append({
@@ -68,7 +75,7 @@ def query_chromadb(query, n_results=5):
                 })
         else:
             print(f"Varování: Neočekávaný formát embeddingů pro {doc_name}")
-    
+
     results = sorted(results, key=lambda x: x['similarity'], reverse=True)
     return results[:n_results]
 
@@ -113,5 +120,4 @@ def handle_query():
     return jsonify({"answer": answer})
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 10000))  # Použití dynamického portu
-    app.run(host="0.0.0.0", port=port, debug=True)  # Odebrání workers=2, debug=True užívá jen 1 worker
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)), debug=True, workers=2)
