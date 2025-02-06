@@ -38,9 +38,11 @@ def load_embeddings_from_github():
     response = requests.get(url)
     if response.status_code == 200:
         try:
-            return response.json()
-        except json.JSONDecodeError:
-            print("⚠️ Chyba: Embeddingy nelze dekódovat jako JSON.")
+            data = response.json()
+            # Konverze všech hodnot na float
+            return {k: [list(map(float, emb)) for emb in v] for k, v in data.items()}
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"⚠️ Chyba: Embeddingy nelze dekódovat ({str(e)})")
             return {}
     else:
         print(f"⚠️ Chyba při načítání embeddingů: {response.status_code}")
@@ -48,10 +50,10 @@ def load_embeddings_from_github():
 
 # Výpočet kosinové podobnosti mezi dvěma vektory
 def cosine_similarity(vec1, vec2):
-    vec1 = np.array(vec1)
-    vec2 = np.array(vec2)
+    vec1 = np.array(vec1, dtype=np.float64)
+    vec2 = np.array(vec2, dtype=np.float64)
     if vec1.shape != vec2.shape:
-        return 0  # Pokud jsou různé délky, vrátíme 0
+        return 0  # Pokud mají různou délku, vrátíme 0
     dot_product = np.dot(vec1, vec2)
     magnitude1 = np.linalg.norm(vec1)
     magnitude2 = np.linalg.norm(vec2)
@@ -60,13 +62,11 @@ def cosine_similarity(vec1, vec2):
 # Vyhledání relevantních dokumentů
 def query_chromadb(query, n_results=5):
     embeddings_data = load_embeddings_from_github()
-    
     if not embeddings_data:
         return []
 
-    # Náhradní embedding dotazu (musí mít stejnou délku jako dokumenty)
     first_doc_embedding = next(iter(embeddings_data.values()))
-    query_embedding = np.zeros_like(first_doc_embedding[0]).tolist()  # Správné vytvoření nulového vektoru
+    query_embedding = np.zeros(len(first_doc_embedding[0]), dtype=np.float64).tolist()
 
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
@@ -76,7 +76,7 @@ def query_chromadb(query, n_results=5):
                 "document": doc_name,
                 "similarity": similarity
             })
-
+    
     results = sorted(results, key=lambda x: x['similarity'], reverse=True)
     return results[:n_results]
 
