@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 # Načtení API klíče z .env souboru
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai.api_key = OPENAI_API_KEY
 
 # Inicializace ChromaDB
 client_chroma = chromadb.PersistentClient(path="./chroma_db")
@@ -32,13 +31,16 @@ def memory_usage():
         "percent": mem.percent
     })
 
-# Načtení embeddingů z GitHubu
-def load_embeddings_from_github(url):
+# Načtení embeddingů dokumentů z GitHubu
+def load_embeddings_from_github():
+    url = "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/embeddings.json"
     response = requests.get(url)
     if response.status_code == 200:
-        return response.json()
+        embeddings_data = response.json()
+        return embeddings_data
     else:
-        raise Exception(f"Chyba při načítání embeddingů: {response.status_code}")
+        print(f"⚠️ Chyba při načítání embeddingů: {response.status_code}")
+        return {}  # Vrátíme prázdný slovník místo vyhození chyby
 
 # Výpočet kosinové podobnosti mezi dvěma vektory
 def cosine_similarity(vec1, vec2):
@@ -47,32 +49,25 @@ def cosine_similarity(vec1, vec2):
     magnitude2 = sum(b * b for b in vec2) ** 0.5
     return dot_product / (magnitude1 * magnitude2) if magnitude1 and magnitude2 else 0
 
-# Funkce pro vyhledání relevantních dokumentů
+# Vyhledání relevantních dokumentů
 def query_chromadb(query, n_results=5):
-    embeddings_data = load_embeddings_from_github(
-        "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/embeddings.json"
-    )
-    query_embeddings_data = load_embeddings_from_github(
-        "https://raw.githubusercontent.com/Dahor212/chatgpt-api/main/Embeddingy/query_embeddings.json"
-    )
-
-    # Získání embeddingu dotazu (pokud existuje)
-    query_embedding = query_embeddings_data.get(query)
-    if query_embedding is None:
-        print(f"Varování: Pro dotaz '{query}' nebyl nalezen embedding.")
+    embeddings_data = load_embeddings_from_github()
+    
+    if not embeddings_data:
         return []
+
+    # Náhradní embedding dotazu (musí mít stejnou délku jako dokumenty)
+    first_doc_embedding = next(iter(embeddings_data.values()))
+    query_embedding = [0] * len(first_doc_embedding[0])  # Vezmeme délku prvního vektoru
 
     results = []
     for doc_name, doc_embeddings in embeddings_data.items():
-        if isinstance(doc_embeddings, list) and all(isinstance(e, list) for e in doc_embeddings):
-            for embedding in doc_embeddings:
-                similarity = cosine_similarity(query_embedding, embedding)
-                results.append({
-                    "document": doc_name,
-                    "similarity": similarity
-                })
-        else:
-            print(f"Varování: Neočekávaný formát embeddingů pro {doc_name}")
+        for embedding in doc_embeddings:
+            similarity = cosine_similarity(query_embedding, embedding)
+            results.append({
+                "document": doc_name,
+                "similarity": similarity
+            })
 
     results = sorted(results, key=lambda x: x['similarity'], reverse=True)
     return results[:n_results]
@@ -87,7 +82,7 @@ def generate_answer_with_gpt(query, context_documents):
 
     try:
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model="gpt-4-turbo",
             messages=[
                 {"role": "system", "content": "Jsi AI asistent, který odpovídá na základě dokumentů."},
                 {"role": "user", "content": prompt}
@@ -97,7 +92,7 @@ def generate_answer_with_gpt(query, context_documents):
         )
         return response["choices"][0]["message"]["content"]
     except Exception as e:
-        print(f"Chyba při volání OpenAI API: {str(e)}")
+        print(f"⚠️ Chyba při volání OpenAI API: {str(e)}")
         return "Došlo k chybě při generování odpovědi."
 
 @app.route("/", methods=["GET"])
