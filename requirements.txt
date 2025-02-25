@@ -1,6 +1,6 @@
 Flask==3.0.0
 Flask-Cors==4.0.0
-gunicorn==21.2.0
+gunicorn==22.0.0
 requests==2.31.0
 numpy==1.26.3  # Starší verze kompatibilní s chromadb
 chromadb==0.4.5
