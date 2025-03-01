@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn==0.18.2
 chromadb
 openai
 python-docx
