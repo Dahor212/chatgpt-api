@@ -43,13 +43,6 @@ class QueryRequest(BaseModel):
 @app.post("/ask")
 async def ask(request: QueryRequest):
     query = request.query
-    
-    # Zde by měla být logika pro vyhledávání v ChromaDB
-    # Například:
-    # response = search_in_chromadb(query) 
-    
-    # Pokud žádné výsledky nejsou, vrátí se odpověď, že nejsou dostupné
-    # Pokud použijete OpenAI, můžete udělat volání API pro zodpovězení dotazu
     try:
         response = openai.Completion.create(
             engine="text-davinci-003",
@@ -59,6 +52,7 @@ async def ask(request: QueryRequest):
         answer = response.choices[0].text.strip()
         return {"answer": answer}
     except Exception as e:
+        print(f"Chyba při zpracování dotazu: {str(e)}")  # Přidání logování pro chybové hlášky
         raise HTTPException(status_code=500, detail="Chyba při zpracování dotazu: " + str(e))
 
 # Nastavení správného portu pro Render
