@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import openai
@@ -6,6 +7,20 @@ from fastapi.responses import FileResponse
 
 # Inicializace FastAPI aplikace
 app = FastAPI()
+
+# Nastavení CORS
+origins = [
+    "http://dotazy.wz.cz",  # Povolit pouze tuto doménu
+    "*",  # Nebo použít "*" pro povolení všech domén, ale to není doporučené pro produkci
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Seznam povolených domén
+    allow_credentials=True,
+    allow_methods=["*"],  # Povolit všechny HTTP metody (POST, GET, DELETE, atd.)
+    allow_headers=["*"],  # Povolit všechny hlavičky
+)
 
 # Nastavení OpenAI API klíče
 openai.api_key = os.getenv("OPENAI_API_KEY")
