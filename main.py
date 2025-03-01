@@ -1,24 +1,23 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import openai
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 # Inicializace FastAPI aplikace
 app = FastAPI()
 
-# Nastavení CORS
+# CORS konfigurace
 origins = [
-    "http://dotazy.wz.cz",  # Povolit pouze tuto doménu
-    "*",  # Nebo použít "*" pro povolení všech domén, ale to není doporučené pro produkci
+    "http://dotazy.wz.cz",  # Povolte pouze konkrétní doménu, ne "*" pro bezpečnost
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Seznam povolených domén
+    allow_origins=origins,  # Povolené domény
     allow_credentials=True,
-    allow_methods=["*"],  # Povolit všechny HTTP metody (POST, GET, DELETE, atd.)
+    allow_methods=["*"],  # Povolit všechny HTTP metody (POST, GET, OPTIONS)
     allow_headers=["*"],  # Povolit všechny hlavičky
 )
 
@@ -43,13 +42,16 @@ class QueryRequest(BaseModel):
 @app.post("/ask")
 async def ask(request: QueryRequest):
     query = request.query
+    
     try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=query,
-            max_tokens=100
+        # Použití nové metody pro volání GPT-3.5 nebo GPT-4
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # Nebo použijte "gpt-4" pro nový model
+            messages=[
+                {"role": "user", "content": query}
+            ]
         )
-        answer = response.choices[0].text.strip()
+        answer = response['choices'][0]['message']['content'].strip()
         return {"answer": answer}
     except Exception as e:
         print(f"Chyba při zpracování dotazu: {str(e)}")  # Přidání logování pro chybové hlášky
