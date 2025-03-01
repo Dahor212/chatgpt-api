@@ -1,51 +1,50 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import openai
-import chromadb
 import os
-
-# Nastavení OpenAI API klíče
-openai.api_key = os.getenv("OPENAI_API_KEY")
+import chromadb
+import openai
+from fastapi.responses import FileResponse
+import json
 
 # Inicializace FastAPI aplikace
 app = FastAPI()
 
-# Připojení k ChromaDB
-client = chromadb.PersistentClient(path="chroma_db")
-collection = client.get_or_create_collection(name="documents")
+# Nastavení OpenAI API klíče
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Kořenový endpoint, který vrátí zprávu o stavu API
-@app.get("/")
-def read_root():
-    return {"message": "API is running!"}
+# Endpoint pro favicon.ico (pokud máte soubor v adresáři "static")
+@app.get("/favicon.ico")
+def favicon():
+    return FileResponse("static/favicon.ico")
 
-# Třída pro příjem dotazu
+# Model pro požadavky na API
 class QueryRequest(BaseModel):
     query: str
 
-# Endpoint pro odesílání dotazu
+# Endpoint pro zpracování dotazů na /ask
 @app.post("/ask")
-def ask_question(request: QueryRequest):
-    # Vytvoření embeddingu pro dotaz
-    query_embedding = openai.Embedding.create(input=request.query, model="text-embedding-ada-002")["data"][0]["embedding"]
-
-    # Dotaz na ChromaDB pro relevantní dokumenty
-    results = collection.query(query_embeddings=[query_embedding], n_results=3)
-
-    # Pokud jsou nalezeny dokumenty, odpověď z ChatGPT na základě těchto dokumentů
-    if results['documents']:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "Odpovídej pouze na základě poskytnutých dokumentů."},
-                {"role": "user", "content": results['documents'][0]}
-            ]
+async def ask(request: QueryRequest):
+    query = request.query
+    
+    # Zde by měla být logika pro vyhledávání v ChromaDB
+    # Například:
+    # response = search_in_chromadb(query) 
+    
+    # Pokud žádné výsledky nejsou, vrátí se odpověď, že nejsou dostupné
+    # Pokud použijete OpenAI, můžete udělat volání API pro zodpovězení dotazu
+    try:
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=query,
+            max_tokens=100
         )
-        return {"answer": response["choices"][0]["message"]["content"]}
-    else:
-        return {"answer": "Na tento dotaz nemám odpověď ve své databázi."}
+        answer = response.choices[0].text.strip()
+        return {"answer": answer}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Chyba při zpracování dotazu: " + str(e))
 
-# Dynamické získání portu pro nasazení na Render
+# Nastavení správného portu pro Render
 if __name__ == "__main__":
+    port = int(os.getenv("PORT", 10000))  # Použije port, který je přidělen Renderem
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+    uvicorn.run(app, host="0.0.0.0", port=port)
