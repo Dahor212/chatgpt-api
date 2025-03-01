@@ -1,13 +1,8 @@
-import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import openai
 import chromadb
-from fastapi import FastAPI
-from pydantic import BaseModel
-import logging
-from fastapi.staticfiles import StaticFiles
-
-# Nastavení pro logování pro debugování
-logging.basicConfig(level=logging.DEBUG)
+import os
 
 # Nastavení OpenAI API klíče
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -18,9 +13,6 @@ app = FastAPI()
 # Připojení k ChromaDB
 client = chromadb.PersistentClient(path="chroma_db")
 collection = client.get_or_create_collection(name="documents")
-
-# Servírování statických souborů (např. favicon.ico)
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Kořenový endpoint, který vrátí zprávu o stavu API
 @app.get("/")
