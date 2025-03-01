@@ -12,6 +12,10 @@ app = FastAPI()
 client = chromadb.PersistentClient(path="chroma_db")
 collection = client.get_or_create_collection(name="documents")
 
+# Kořenový endpoint, který vrátí zprávu o stavu API
+@app.get("/")
+def read_root():
+    return {"message": "API is running!"}
 
 class QueryRequest(BaseModel):
     query: str
