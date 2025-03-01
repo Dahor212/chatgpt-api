@@ -1,16 +1,19 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import os
-import chromadb
 import openai
 from fastapi.responses import FileResponse
-import json
 
 # Inicializace FastAPI aplikace
 app = FastAPI()
 
 # Nastavení OpenAI API klíče
 openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Kořenový endpoint (pro testování připojení)
+@app.get("/")
+def root():
+    return {"message": "API je online! Použijte endpoint /ask pro odeslání dotazu."}
 
 # Endpoint pro favicon.ico (pokud máte soubor v adresáři "static")
 @app.get("/favicon.ico")
