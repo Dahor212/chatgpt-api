@@ -26,8 +26,6 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     raise RuntimeError("Chybí API klíč OpenAI. Nastavte proměnnou prostředí OPENAI_API_KEY.")
 
-openai.api_key = openai_api_key  # Nastavení klíče pro OpenAI knihovnu
-
 # Kořenový endpoint (pro testování připojení)
 @app.get("/")
 def root():
@@ -48,13 +46,13 @@ async def ask(request: QueryRequest):
     query = request.query
 
     try:
-        # Použití správného API volání dle OpenAI knihovny
-        response = openai.ChatCompletion.create(
+        # Použití správného API volání dle nové OpenAI knihovny
+        client = openai.OpenAI(api_key=openai_api_key)
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": query}]
         )
-        
-        answer = response["choices"][0]["message"]["content"].strip()
+        answer = response.choices[0].message.content.strip()
         return {"answer": answer}
     
     except openai.OpenAIError as e:
