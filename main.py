@@ -47,11 +47,14 @@ async def ask(request: QueryRequest):
 
     try:
         # Použití správného API volání dle nové OpenAI knihovny
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": query}],
-            api_key=openai_api_key  # Použití klíče explicitně
-        )
+        response = openai.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[
+        {"role": "user", "content": query}
+    ]
+)
+answer = response.choices[0].message.content.strip()
+
 
         answer = response["choices"][0]["message"]["content"].strip()
         return {"answer": answer}
