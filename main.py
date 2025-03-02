@@ -21,15 +21,17 @@ app.add_middleware(
     allow_headers=["*"],  # Povolit všechny hlavičky
 )
 
-# Nastavení OpenAI API klíče
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Načtení OpenAI API klíče z prostředí
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if not openai_api_key:
+    raise RuntimeError("Chybí API klíč OpenAI. Nastavte proměnnou prostředí OPENAI_API_KEY.")
 
 # Kořenový endpoint (pro testování připojení)
 @app.get("/")
 def root():
     return {"message": "API je online! Použijte endpoint /ask pro odeslání dotazu."}
 
-# Endpoint pro favicon.ico (pokud máte soubor v adresáři "static")
+# Endpoint pro favicon.ico
 @app.get("/favicon.ico")
 def favicon():
     return FileResponse("static/favicon.ico")
@@ -42,22 +44,27 @@ class QueryRequest(BaseModel):
 @app.post("/ask")
 async def ask(request: QueryRequest):
     query = request.query
-    
-    try:
-        # Použití nové metody pro volání GPT-3.5 nebo GPT-4
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # Nebo použijte "gpt-4" pro nový model
-            messages=[
-                {"role": "user", "content": query}
-            ]
-        )
-        answer = response['choices'][0]['message']['content'].strip()
-        return {"answer": answer}
-    except Exception as e:
-        print(f"Chyba při zpracování dotazu: {str(e)}")  # Přidání logování pro chybové hlášky
-        raise HTTPException(status_code=500, detail="Chyba při zpracování dotazu: " + str(e))
 
-# Nastavení správného portu pro Render
+    try:
+        # Použití správného API volání dle nové OpenAI knihovny
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": query}],
+            api_key=openai_api_key  # Použití klíče explicitně
+        )
+
+        answer = response["choices"][0]["message"]["content"].strip()
+        return {"answer": answer}
+    
+    except openai.OpenAIError as e:
+        print(f"Chyba při volání OpenAI API: {str(e)}")
+        raise HTTPException(status_code=500, detail="Chyba při komunikaci s OpenAI API.")
+
+    except Exception as e:
+        print(f"Neočekávaná chyba: {str(e)}")
+        raise HTTPException(status_code=500, detail="Interní chyba serveru.")
+
+# Spuštění aplikace
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))  # Použije port, který je přidělen Renderem
     import uvicorn
