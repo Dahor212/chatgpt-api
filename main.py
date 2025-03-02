@@ -7,7 +7,7 @@ from openai import OpenAI
 
 # Nastavení cesty k databázi
 DB_PATH = "./chroma.sqlite3"
-GITHUB_DB_URL = "https://raw.githubusercontent.com/uzivatel/repo/main/chroma.sqlite3"
+GITHUB_DB_URL = "https://github.com/Dahor212/chatgpt-api/blob/main/chroma_db/chroma.sqlite3"
 
 def download_db():
     """Stáhne databázi z GitHubu, pokud neexistuje."""
