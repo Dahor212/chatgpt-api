@@ -7,6 +7,8 @@ import requests
 import json
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+import tempfile
+import shutil
 
 # Inicializace FastAPI aplikace
 app = FastAPI()
@@ -29,22 +31,35 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     raise RuntimeError("Chybí API klíč OpenAI. Nastavte proměnnou prostředí OPENAI_API_KEY.")
 
-# Cesta k ChromaDB databázi (musí být složka, ne soubor!)
+# URL k GitHubu s ChromaDB
+GITHUB_CHROMADB_URL = "https://github.com/Dahor212/chatgpt-api/blob/main/chroma_db/chroma.sqlite3"
+
+# Stažení a rozbalení ChromaDB databáze z GitHubu
+def download_chromadb_from_github(url: str) -> str:
+    response = requests.get(url)
+    if response.status_code == 200:
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            tmp_file.write(response.content)
+            tmp_file_path = tmp_file.name
+            # Předpokládáme, že je archiv ZIP
+            shutil.unpack_archive(tmp_file_path, "chroma_db")
+            os.remove(tmp_file_path)  # Odstraní dočasný soubor
+            return "chroma_db"
+    else:
+        raise RuntimeError("Nepodařilo se stáhnout databázi ChromaDB z GitHubu.")
+
+# Cesta k ChromaDB databázi (předpokládáme, že je po rozbalení ve složce 'chroma_db')
 DB_PATH = "chroma_db"
+
+# Pokud databáze ještě neexistuje, stáhneme ji z GitHubu
+if not os.path.exists(DB_PATH):
+    print("Stahuji ChromaDB z GitHubu...")
+    DB_PATH = download_chromadb_from_github(GITHUB_CHROMADB_URL)
+    print("ChromaDB byla úspěšně stažena a rozbalena.")
 
 # Inicializace ChromaDB
 chroma_client = chromadb.PersistentClient(path=DB_PATH)
 collection = chroma_client.get_or_create_collection(name="docs")
-
-# Načtení embeddingů z GitHubu
-GITHUB_EMBEDDINGS_URL = "https://raw.githubusercontent.com/uzivatel/repozitar/main/embeddings.json"
-response = requests.get(GITHUB_EMBEDDINGS_URL)
-if response.status_code == 200:
-    embeddings_data = response.json()
-    for doc in embeddings_data:
-        collection.add(documents=[doc["text"]], embeddings=[doc["embedding"]], ids=[doc["id"]])
-else:
-    raise RuntimeError("Nepodařilo se načíst embeddingy z GitHubu.")
 
 # Kořenový endpoint (pro testování připojení)
 @app.get("/")
