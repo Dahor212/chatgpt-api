@@ -1,42 +1,38 @@
-import os
-import shutil
-import requests
+from fastapi import FastAPI, HTTPException
 import chromadb
-from fastapi import FastAPI
-from openai import OpenAI
+import os
+from pydantic import BaseModel
 
 # Nastavení cesty k databázi
-DB_PATH = "./chroma.sqlite3"
-GITHUB_DB_URL = "https://github.com/Dahor212/chatgpt-api/blob/main/chroma_db/chroma.sqlite3"
+DB_PATH = "chroma_db/chroma.sqlite3"
 
-def download_db():
-    """Stáhne databázi z GitHubu, pokud neexistuje."""
-    if not os.path.exists(DB_PATH):
-        print("Stahuji ChromaDB z GitHubu...")
-        response = requests.get(GITHUB_DB_URL, stream=True)
-        if response.status_code == 200:
-            with open(DB_PATH, 'wb') as f:
-                shutil.copyfileobj(response.raw, f)
-            print("ChromaDB stažena.")
-        else:
-            raise Exception("Nepodařilo se stáhnout databázi.")
-    else:
-        print("Databáze již existuje.")
+# Kontrola a smazání souboru, pokud existuje
+if os.path.exists(DB_PATH):
+    os.remove(DB_PATH)
 
-# Stažení databáze při startu aplikace
-download_db()
-
-# Připojení ke stávající databázi
+# Inicializace ChromaDB
 chroma_client = chromadb.PersistentClient(path=DB_PATH)
-collection = chroma_client.get_collection("documents")
+collection = chroma_client.get_or_create_collection(name="docs")
 
-# Inicializace FastAPI
+# FastAPI aplikace
 app = FastAPI()
 
-@app.get("/query/")
-def query_chatbot(query: str):
-    """Zpracuje dotaz a vyhledá odpověď v ChromaDB."""
-    results = collection.query(query_texts=[query], n_results=3)
-    if results and results['documents']:
-        return {"response": results['documents'][0]}
-    return {"response": "Omlouváme se, ale nemáme informace k tomuto dotazu."}
+# Model dotazu
+class QueryRequest(BaseModel):
+    query_embedding: list[float]
+    top_k: int = 3
+
+@app.post("/query")
+def query_chromadb(request: QueryRequest):
+    try:
+        results = collection.query(
+            query_embeddings=[request.query_embedding],
+            n_results=request.top_k
+        )
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/")
+def read_root():
+    return {"message": "ChromaDB FastAPI server is running"}
