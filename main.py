@@ -82,7 +82,7 @@ def generate_query_embedding(query: str):
         model="text-embedding-ada-002"  # Používáme model pro embeddingy textu
     )
     # Opravený přístup k embeddingu
-    return response.data[0].embedding
+    return response['data'][0]['embedding']
 
 # Endpoint pro zpracování dotazů na /ask
 @app.post("/ask")
@@ -102,14 +102,12 @@ async def ask(request: QueryRequest):
             return {"answer": "Odpověď nelze najít v dostupných dokumentech."}
         
         # Použití OpenAI API s omezením na nalezené dokumenty
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "Odpovídej pouze na základě poskytnutých dokumentů."},
-                {"role": "user", "content": f"Na základě těchto dokumentů odpověz na dotaz:\n{relevant_docs}\n\nDotaz: {query}"}
-            ]
+        response = openai.Completion.create(
+            model="gpt-3.5-turbo",  # Používáme nový způsob pro volání Completion modelu
+            prompt=f"Na základě těchto dokumentů odpověz na dotaz:\n{relevant_docs}\n\nDotaz: {query}",
+            max_tokens=1000
         )
-        answer = response.choices[0].message.content.strip()
+        answer = response['choices'][0]['text'].strip()
         return {"answer": answer}
     
     except openai.OpenAIError as e:
