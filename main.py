@@ -102,9 +102,9 @@ async def ask(request: QueryRequest):
         else:
             return {"answer": "Odpověď nelze najít v dostupných dokumentech."}
         
-        # Použití OpenAI API s modelem text-davinci-002
+        # Použití OpenAI API s modelem gpt-3.5-turbo
         response = openai.Completion.create(
-            engine="text-davinci-002",  # Starší model pro generování odpovědí
+            engine="gpt-3.5-turbo",  # Používáme nový model gpt-3.5-turbo
             prompt=f"Na základě těchto dokumentů odpověz na dotaz:\n{relevant_docs}\n\nDotaz: {query}",
             max_tokens=1000
         )
