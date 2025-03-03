@@ -29,8 +29,8 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     raise RuntimeError("Chybí API klíč OpenAI. Nastavte proměnnou prostředí OPENAI_API_KEY.")
 
-# Cesta k ChromaDB databázi
-DB_PATH = "chroma_db/chroma.sqlite3"
+# Cesta k ChromaDB databázi (musí být složka, ne soubor!)
+DB_PATH = "chroma_db"
 
 # Inicializace ChromaDB
 chroma_client = chromadb.PersistentClient(path=DB_PATH)
