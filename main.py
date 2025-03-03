@@ -75,23 +75,33 @@ def favicon():
 class QueryRequest(BaseModel):
     query: str
 
+# Funkce pro generování embeddingu dotazu pomocí OpenAI API
+def generate_query_embedding(query: str):
+    response = openai.Embedding.create(
+        input=query,
+        model="text-embedding-ada-002"  # Používáme model pro embeddingy textu
+    )
+    return response['data'][0]['embedding']
+
 # Endpoint pro zpracování dotazů na /ask
 @app.post("/ask")
 async def ask(request: QueryRequest):
     query = request.query
-    query_embedding = [0.0] * 1536  # Zde by měl být embedding dotazu, zatím placeholder
 
     try:
-        # Hledání nejpodobnějších dokumentů
+        # Generování embeddingu dotazu
+        query_embedding = generate_query_embedding(query)
+
+        # Hledání nejpodobnějších dokumentů v ChromaDB
         results = collection.query(query_embeddings=[query_embedding], n_results=3)
+        
         if results["documents"]:
             relevant_docs = "\n".join(results["documents"][0])
         else:
             return {"answer": "Odpověď nelze najít v dostupných dokumentech."}
         
         # Použití OpenAI API s omezením na nalezené dokumenty
-        client = openai.OpenAI(api_key=openai_api_key)
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "Odpovídej pouze na základě poskytnutých dokumentů."},
