@@ -75,15 +75,16 @@ def favicon():
 class QueryRequest(BaseModel):
     query: str
 
+
 # Funkce pro generování embeddingu dotazu pomocí OpenAI API
 def generate_query_embedding(query: str):
-    # Použití starší metody pro generování embeddingu ve verzi openai==0.28
-    response = openai.Embedding.create(
-        input=query,
-        engine="text-embedding-ada-002"  # Starší verze knihovny používá jiný formát pro engine
+    response = openai.embeddings.create(
+        model="text-embedding-ada-002",  # Vhodný model pro embeddingy
+        input=query
     )
-    # V této verzi vrací embedding v response['data'][0]['embedding']
+    # Extrahování embeddingu z odpovědi
     return response['data'][0]['embedding']
+
 
 # Endpoint pro zpracování dotazů na /ask
 @app.post("/ask")
