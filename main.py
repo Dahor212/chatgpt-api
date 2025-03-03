@@ -4,7 +4,6 @@ import os
 import openai
 import chromadb
 import requests
-import json
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
@@ -75,22 +74,17 @@ def favicon():
 class QueryRequest(BaseModel):
     query: str
 
-
-
-
-# Funkce pro generování embeddingu dotazu pomocí OpenAI API
+# Funkce pro generování embeddingu dotazu pomocí OpenAI API (novější verze)
 def generate_query_embedding(query: str):
-    # Zavolání OpenAI API pro generování embeddingu
-    response = openai.embeddings.create(
+    # Zavolání OpenAI API pro generování embeddingu (nové API rozhraní)
+    response = openai.Embedding.create(
         model="text-embedding-ada-002",  # Zvol model pro embeddingy
         input=query
     )
 
-    # Extrahování embeddingu z odpovědi (správný přístup k datům)
-    embedding = response['data'][0]['embedding']
+    # Extrahování embeddingu z odpovědi (správný přístup k datům pro novější verzi)
+    embedding = response.data[0].embedding
     return embedding
-
-
 
 # Endpoint pro zpracování dotazů na /ask
 @app.post("/ask")
