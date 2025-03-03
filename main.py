@@ -77,12 +77,13 @@ class QueryRequest(BaseModel):
 
 # Funkce pro generování embeddingu dotazu pomocí OpenAI API
 def generate_query_embedding(query: str):
-    response = openai.embeddings.create(  # Používáme nový způsob pro generování embeddingu
+    # Použití starší metody pro generování embeddingu ve verzi openai==0.28
+    response = openai.Embedding.create(
         input=query,
-        model="text-embedding-ada-002"  # Používáme model pro embeddingy textu
+        engine="text-embedding-ada-002"  # Starší verze knihovny používá jiný formát pro engine
     )
-    # Opravený přístup k embeddingu - vrácená odpověď je objekt, který má atribut "data"
-    return response.data[0].embedding  # Opravený přístup k embeddingu
+    # V této verzi vrací embedding v response['data'][0]['embedding']
+    return response['data'][0]['embedding']
 
 # Endpoint pro zpracování dotazů na /ask
 @app.post("/ask")
@@ -103,7 +104,7 @@ async def ask(request: QueryRequest):
         
         # Použití OpenAI API s omezením na nalezené dokumenty
         response = openai.Completion.create(
-            model="gpt-3.5-turbo",  # Používáme nový způsob pro volání Completion modelu
+            engine="text-davinci-003",  # Používáme starší model pro generování odpovědí
             prompt=f"Na základě těchto dokumentů odpověz na dotaz:\n{relevant_docs}\n\nDotaz: {query}",
             max_tokens=1000
         )
