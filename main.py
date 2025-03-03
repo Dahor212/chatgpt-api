@@ -76,15 +76,25 @@ class QueryRequest(BaseModel):
 
 # Funkce pro generování embeddingu dotazu pomocí OpenAI API (novější verze)
 def generate_query_embedding(query: str):
-    # Zavolání OpenAI API pro generování embeddingu (nové API rozhraní)
-    response = openai.embeddings.create(
-        model="text-embedding-ada-002",  # Zvol model pro embeddingy
-        input=query
-    )
-
-    # Extrahování embeddingu z odpovědi (správný přístup k datům pro novější verzi)
-    embedding = response['data'][0]['embedding']
-    return embedding
+    try:
+        # Zavolání OpenAI API pro generování embeddingu (nové API rozhraní)
+        print(f"Generování embeddingu pro dotaz: {query}")  # Debug: Tisk dotazu
+        response = openai.embeddings.create(
+            model="text-embedding-ada-002",  # Zvol model pro embeddingy
+            input=query
+        )
+        
+        # Debug: Tisk odpovědi z OpenAI API
+        print(f"OpenAI odpověď na embedding: {response}")
+        
+        # Oprava přístupu k odpovědi
+        embedding = response['data'][0]['embedding']  # Správný způsob přístupu
+        print(f"Embedding pro dotaz: {embedding}")  # Debug: Tisk embeddingu
+        return embedding
+    
+    except Exception as e:
+        print(f"Chyba při generování embeddingu: {e}")  # Debug: Chybová hláška
+        raise
 
 # Endpoint pro zpracování dotazů na /ask
 @app.post("/ask")
@@ -95,9 +105,15 @@ async def ask(request: QueryRequest):
         # Generování embeddingu dotazu
         query_embedding = generate_query_embedding(query)
 
+        # Debug: Tisk embeddingu dotazu
+        print(f"Embedding dotazu: {query_embedding}")
+
         # Hledání nejpodobnějších dokumentů v ChromaDB
         results = collection.query(query_embeddings=[query_embedding], n_results=3)
-        
+
+        # Debug: Tisk výsledků z ChromaDB
+        print(f"Výsledky z ChromaDB: {results}")
+
         if results["documents"]:
             relevant_docs = "\n".join(results["documents"][0])
         else:
@@ -109,15 +125,19 @@ async def ask(request: QueryRequest):
             prompt=f"Na základě těchto dokumentů odpověz na dotaz:\n{relevant_docs}\n\nDotaz: {query}",
             max_tokens=1000
         )
+        
+        # Debug: Tisk odpovědi z OpenAI Completion
+        print(f"OpenAI odpověď na dotaz: {response}")
+        
         answer = response['choices'][0]['text'].strip()
         return {"answer": answer}
     
     except openai.OpenAIError as e:
-        print(f"Chyba při volání OpenAI API: {str(e)}")
+        print(f"Chyba při volání OpenAI API: {str(e)}")  # Debug: Chybová hláška
         raise HTTPException(status_code=500, detail="Chyba při komunikaci s OpenAI API.")
     
     except Exception as e:
-        print(f"Neočekávaná chyba: {str(e)}")
+        print(f"Neočekávaná chyba: {str(e)}")  # Debug: Chybová hláška
         raise HTTPException(status_code=500, detail="Interní chyba serveru.")
 
 # Spuštění aplikace
