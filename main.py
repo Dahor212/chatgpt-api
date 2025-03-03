@@ -77,7 +77,7 @@ class QueryRequest(BaseModel):
 
 # Funkce pro generování embeddingu dotazu pomocí OpenAI API
 def generate_query_embedding(query: str):
-    response = openai.Embedding.create(
+    response = openai.embeddings.create(
         input=query,
         model="text-embedding-ada-002"  # Používáme model pro embeddingy textu
     )
