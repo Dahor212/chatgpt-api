@@ -81,7 +81,8 @@ def generate_query_embedding(query: str):
         input=query,
         model="text-embedding-ada-002"  # Používáme model pro embeddingy textu
     )
-    return response['data'][0]['embedding']
+    # Opravený přístup k embeddingu
+    return response.data[0].embedding
 
 # Endpoint pro zpracování dotazů na /ask
 @app.post("/ask")
