@@ -77,13 +77,13 @@ class QueryRequest(BaseModel):
 # Funkce pro generování embeddingu dotazu pomocí OpenAI API (novější verze)
 def generate_query_embedding(query: str):
     # Zavolání OpenAI API pro generování embeddingu (nové API rozhraní)
-    response = openai.Embedding.create(
+    response = openai.embeddings.create(
         model="text-embedding-ada-002",  # Zvol model pro embeddingy
         input=query
     )
 
     # Extrahování embeddingu z odpovědi (správný přístup k datům pro novější verzi)
-    embedding = response.data[0].embedding
+    embedding = response['data'][0]['embedding']
     return embedding
 
 # Endpoint pro zpracování dotazů na /ask
